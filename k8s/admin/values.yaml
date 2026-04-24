@@ -1,0 +1,143 @@
+global:
+  image:
+    repository: us-central1-docker.pkg.dev/rcvrd-1777d/recovered-images
+    name: recovered-backend-admin
+image:
+  repository: us-central1-docker.pkg.dev/rcvrd-1777d/recovered-images
+  name: recovered-backend-admin
+
+deployment:
+  revisions: 1
+  replicas: 1
+pod:
+  serviceAccount: gcp-sa
+command:
+  [
+    "uvicorn",
+    "admin.main:app",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    "8080",
+    "--proxy-headers",
+    "--log-level",
+    "info",
+  ]
+
+service:
+  ports:
+    - port: 8080
+
+ingress:
+  domain: "api.recoveredspace.com"
+  tls:
+    enabled: false
+  class: traefik
+  path: "/admin"
+  pathType: ""
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+    traefik.ingress.kubernetes.io/router.entrypoints: "web, websecure"
+    traefik.http.routers.blog.rule: "Host(`api.recoveredspace.com`) && Path(`/admin`)"
+    traefik.http.routers.blog.tls: "true"
+    traefik.http.routers.blog.tls.certresolver: "letsencrypt"
+
+livenessProbe:
+  httpGet:
+  tcpSocket:
+    host: 1.1.1.1 #CloudFlare
+    port: 53 #DNS
+  successThreshold: 1
+  failureThreshold: 2
+  initialDelaySeconds: 60
+
+readinessProbe:
+  httpGet:
+  tcpSocket:
+    host: 1.1.1.1 #CloudFlare
+    port: 53 #DNS
+  successThreshold: 1
+  failureThreshold: 2
+  initialDelaySeconds: 60
+
+extraEnv:
+  - name: PG_USER
+    valueFrom:
+      secretKeyRef:
+        name: pg-cluster-app
+        key: user
+  - name: PG_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: pg-cluster-app
+        key: password
+  - name: FIREBASE_CERTIFICATE
+    valueFrom:
+      secretKeyRef:
+        name: recovered-secrets
+        key: firebase_certificate
+  - name: OTEL_AUTH_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: recovered-otlp
+        key: OTEL_AUTH_TOKEN
+  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    valueFrom:
+      secretKeyRef:
+        name: recovered-otlp
+        key: OTEL_EXPORTER_OTLP_ENDPOINT
+  - name: OTEL_EXPORTER_OTLP_PROTOCOL
+    valueFrom:
+      secretKeyRef:
+        name: recovered-otlp
+        key: OTEL_EXPORTER_OTLP_PROTOCOL
+  - name: CENTRIFUGE_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: centrifugo-secret
+        key: apiKey
+  - name: CENTRIFUGE_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: centrifugo-secret
+        key: tokenHmacSecretKey
+  - name: ONESIGNAL_APP_ID
+    valueFrom:
+      secretKeyRef:
+        name: onesignal-secret
+        key: appId
+  - name: ONESIGNAL_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: onesignal-secret
+        key: apiKey
+  - name: GSPREAD_SERVICE_ACCOUNT_JSON
+    valueFrom:
+      secretKeyRef:
+        name: gspread-credentials
+        key: GSPREAD_SERVICE_ACCOUNT_JSON
+  - name: ADMIN_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: admin-credentials
+        key: ADMIN_PASSWORD
+  - name: FORWARDED_ALLOW_IPS
+    value: "*"
+  - name: CIRCLE_ADMIN_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: circle-secret
+        key: adminApiKey
+  - name: CIRCLE_HEADLESS_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: circle-secret
+        key: headlessApiKey
+
+resources:
+  limits:
+    cpu: 250m
+    memory: 512Mi
+  requests:
+    cpu: 10m
+    memory: 150Mi

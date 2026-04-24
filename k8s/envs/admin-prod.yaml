@@ -1,0 +1,13 @@
+global:
+  image:
+    repository: us-central1-docker.pkg.dev/rcvrd-1777d/recovered-images
+admin:
+
+  ingress:
+    domain: "api.app.recovered.space"
+  nodeSelector:
+    topology.kubernetes.io/zone: "us-central1-a"
+
+envFrom: |
+  - configMapRef:
+      name: recovered-config

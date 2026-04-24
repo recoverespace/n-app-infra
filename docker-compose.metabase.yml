@@ -1,0 +1,70 @@
+services:
+  metabase:
+    image: ${METABASE_IMAGE:-metabase/metabase:v0.50.6}
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      MB_DB_TYPE: ${METABASE_DB_TYPE:-postgres}
+      MB_DB_DBNAME: ${METABASE_DB_NAME:-metabase}
+      MB_DB_HOST: ${METABASE_DB_HOST:-${PG_HOST:-postgres}}
+      MB_DB_PORT: ${METABASE_DB_PORT:-${PG_PORT:-5432}}
+      MB_DB_USER: ${METABASE_DB_USER:-${PG_USER:-postgres}}
+      MB_DB_PASS: ${METABASE_DB_PASSWORD:-${PG_PASSWORD:-postgres}}
+      MB_SITE_URL: ${METABASE_SITE_URL:-https://metabase.dev.localhost}
+      MB_EMBEDDING_APP_ORIGIN: ${METABASE_EMBEDDING_APP_ORIGIN:-}
+      MB_ENABLE_EMBEDDING: ${METABASE_ENABLE_EMBEDDING:-false}
+      JAVA_TOOL_OPTIONS: ${METABASE_JAVA_TOOL_OPTIONS:--Xmx512m}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget --spider --quiet http://localhost:3000/api/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    volumes:
+      - metabase-data:/metabase-data
+    networks:
+      - backend
+      - edge
+    labels:
+      - "traefik.enable=${METABASE_TRAEFIK_ENABLED:-true}"
+      - "traefik.docker.network=${TRAEFIK_STACK}-recovered-network"
+      - "traefik.http.routers.${TRAEFIK_STACK}-metabase.rule=Host(`${METABASE_HOST}`)"
+      - "traefik.http.routers.${TRAEFIK_STACK}-metabase.entrypoints=websecure"
+      - "traefik.http.routers.${TRAEFIK_STACK}-metabase.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${TRAEFIK_STACK}-metabase.service=${TRAEFIK_STACK}-metabase"
+      - "traefik.http.services.${TRAEFIK_STACK}-metabase.loadbalancer.server.port=3000"
+      - "traefik.http.routers.${TRAEFIK_STACK}-metabase-http.rule=Host(`${METABASE_HOST}`)"
+      - "traefik.http.routers.${TRAEFIK_STACK}-metabase-http.entrypoints=web"
+      - "traefik.http.routers.${TRAEFIK_STACK}-metabase-http.middlewares=redirect-to-https"
+
+  metabase-init:
+    image: python:3.12-alpine
+    restart: "no"
+    depends_on:
+      metabase:
+        condition: service_healthy
+    environment:
+      METABASE_BASE_URL: ${METABASE_BASE_URL:-http://metabase:3000}
+      METABASE_ADMIN_EMAIL: ${METABASE_ADMIN_EMAIL:-}
+      METABASE_ADMIN_FIRST_NAME: ${METABASE_ADMIN_FIRST_NAME:-Admin}
+      METABASE_ADMIN_LAST_NAME: ${METABASE_ADMIN_LAST_NAME:-User}
+      METABASE_ADMIN_PASSWORD: ${METABASE_ADMIN_PASSWORD:-}
+      METABASE_SITE_NAME: ${METABASE_SITE_NAME:-Recovered}
+      METABASE_DATA_DB_ENGINE: ${METABASE_DATA_DB_ENGINE:-postgres}
+      METABASE_DATA_DB_HOST: ${METABASE_DATA_DB_HOST:-${PG_HOST:-postgres}}
+      METABASE_DATA_DB_PORT: ${METABASE_DATA_DB_PORT:-${PG_PORT:-5432}}
+      METABASE_DATA_DB_NAME: ${METABASE_DATA_DB_NAME:-${PG_SCHEMA:-backend}}
+      METABASE_DATA_DB_USER: ${METABASE_DATA_DB_USER:-${PG_USER:-postgres}}
+      METABASE_DATA_DB_PASSWORD: ${METABASE_DATA_DB_PASSWORD:-${PG_PASSWORD:-postgres}}
+      METABASE_DATA_DB_SSL: ${METABASE_DATA_DB_SSL:-false}
+    volumes:
+      - ./docker/metabase/init-metabase.py:/scripts/init-metabase.py:ro
+    entrypoint: ["python", "/scripts/init-metabase.py"]
+    networks:
+      - backend
+
+volumes:
+  metabase-data:

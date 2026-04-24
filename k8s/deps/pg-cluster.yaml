@@ -1,0 +1,33 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg-cluster
+  namespace: apps
+spec:
+  instances: 1
+  primaryUpdateStrategy: unsupervised
+  affinity:
+    nodeSelector:
+      topology.kubernetes.io/zone: "us-central1-a"
+  backup:
+    barmanObjectStore:
+      destinationPath: "gs://k8s-cluster-postgresql/cnpg/"
+      googleCredentials:
+        gkeEnvironment: true
+      wal:
+        compression: bzip2
+        maxParallel: 3
+
+  storage:
+    size: 25Gi
+
+  bootstrap:
+    initdb:
+      database: backend
+      owner: backend-user
+  monitoring:
+    enablePodMonitor: false
+  serviceAccountTemplate:
+    metadata:
+      annotations:
+        iam.gke.io/gcp-service-account: k8s-cluster-sa@rcvrd-1777d.iam.gserviceaccount.com

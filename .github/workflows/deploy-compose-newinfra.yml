@@ -1,0 +1,104 @@
+name: Deploy New Infra Stack
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - prod
+      ref:
+        description: "Git ref (branch/tag)"
+        required: false
+        default: ""
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Set deployment variables
+        id: vars
+        run: |
+          case "${{ github.event.inputs.environment }}" in
+            prod)
+              echo "remote_path=/opt/rcvd/prod" >> $GITHUB_OUTPUT
+              echo "env_file=.env.prod" >> $GITHUB_OUTPUT
+              echo "compose_project=prodenv" >> $GITHUB_OUTPUT
+              echo "ssh_user=rcvdprod" >> $GITHUB_OUTPUT
+              ;;
+            dev|*)
+              echo "remote_path=/opt/rcvd/dev" >> $GITHUB_OUTPUT
+              echo "env_file=.env.dev" >> $GITHUB_OUTPUT
+              echo "compose_project=devenv" >> $GITHUB_OUTPUT
+              echo "ssh_user=rcvddev" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+      - name: Sync repository to VM (new infra)
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ github.event.inputs.environment == 'prod' && secrets.NEWINFRA_PROD_HOST || secrets.NEWINFRA_DEV_HOST }}
+          username: ${{ steps.vars.outputs.ssh_user }}
+          key: ${{ github.event.inputs.environment == 'prod' && secrets.NEWINFRA_PROD_SSH_KEY || secrets.NEWINFRA_DEV_SSH_KEY }}
+          port: ${{ github.event.inputs.environment == 'prod' && secrets.NEWINFRA_PROD_SSH_PORT || secrets.NEWINFRA_DEV_SSH_PORT || 22 }}
+          source: "."
+          target: ${{ steps.vars.outputs.remote_path }}
+          rm: false
+
+      - name: Deploy stack on VM (new infra)
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ github.event.inputs.environment == 'prod' && secrets.NEWINFRA_PROD_HOST || secrets.NEWINFRA_DEV_HOST }}
+          username: ${{ steps.vars.outputs.ssh_user }}
+          key: ${{ github.event.inputs.environment == 'prod' && secrets.NEWINFRA_PROD_SSH_KEY || secrets.NEWINFRA_DEV_SSH_KEY }}
+          port: ${{ github.event.inputs.environment == 'prod' && secrets.NEWINFRA_PROD_SSH_PORT || secrets.NEWINFRA_DEV_SSH_PORT || 22 }}
+          script: |
+            set -euo pipefail
+            cd ${{ steps.vars.outputs.remote_path }}
+            # optional: refresh secrets before deploy (custom script if exists)
+            if [ -x scripts/pull-secrets.sh ]; then
+              scripts/pull-secrets.sh ${{ github.event.inputs.environment }}
+            fi
+
+            # ensure shared docker networks exist for dev and prod edge traffic
+            for net in dev-recovered-network prod-recovered-network; do
+              if ! sudo docker network inspect "$net" >/dev/null 2>&1; then
+                sudo docker network create "$net"
+              fi
+            done
+
+            # keep edge Traefik proxy running for this environment
+            sudo docker compose --project-name traefik --env-file ${{ steps.vars.outputs.env_file }} -f docker-compose.traefik.yml up -d
+
+            METABASE_ENABLED=false
+            if [ -f "${{ steps.vars.outputs.env_file }}" ]; then
+              METABASE_VALUE=$(grep -E '^METABASE_ENABLED=' "${{ steps.vars.outputs.env_file }}" | tail -n1 | cut -d'=' -f2- | tr -d '"' | tr '[:upper:]' '[:lower:]') || true
+              if [ "$METABASE_VALUE" = "true" ]; then
+                METABASE_ENABLED=true
+              fi
+            fi
+
+            COMPOSE_FILES="-f docker-compose.yml -f docker-compose.api.yml"
+            if [ "$METABASE_ENABLED" = "true" ]; then
+              COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.metabase.yml"
+            fi
+
+            COMPOSE="sudo docker compose --project-name ${{ steps.vars.outputs.compose_project }} --env-file ${{ steps.vars.outputs.env_file }} $COMPOSE_FILES"
+
+            $COMPOSE down --remove-orphans || true
+            $COMPOSE pull
+            $COMPOSE up -d --build --remove-orphans
+            $COMPOSE run --rm migrations || true
+            $COMPOSE ps
+

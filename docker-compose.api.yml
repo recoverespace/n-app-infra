@@ -1,0 +1,162 @@
+services:
+  admin:
+    command: uvicorn admin.main:app  --reload --host 0.0.0.0 --proxy-headers --forwarded-allow-ips='*'
+    restart: on-failure
+    build:
+      context: .
+      target: admin
+    volumes:
+      - ./src/admin/:/app/src/admin:z
+      - ./src/common/:/app/src/common/:z
+      - ./src/data/:/app/src/data/:z
+      - ./storage/:/app/storage/:z
+    networks:
+      - backend
+      - edge
+    environment:
+      - PYTHONUNBUFFERED=${PYTHONUNBUFFERED:-1}
+      - PG_HOST=${PG_HOST}
+      - REDIS_DSN=${REDIS_DSN}
+    env_file:
+      - ${ENV_FILE:-.env}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_STACK}-recovered-network"
+      - "traefik.http.routers.${TRAEFIK_STACK}-admin.rule=Host(`${TRAEFIK_DOMAIN}`) && PathPrefix(`/admin`)"
+      - "traefik.http.routers.${TRAEFIK_STACK}-admin.entrypoints=websecure"
+      - "traefik.http.routers.${TRAEFIK_STACK}-admin.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${TRAEFIK_STACK}-admin.service=${TRAEFIK_STACK}-admin"
+      - "traefik.http.services.${TRAEFIK_STACK}-admin.loadbalancer.server.port=8000"
+      - "traefik.http.routers.${TRAEFIK_STACK}-admin-http.rule=Host(`${TRAEFIK_DOMAIN}`) && PathPrefix(`/admin`)"
+      - "traefik.http.routers.${TRAEFIK_STACK}-admin-http.entrypoints=web"
+      - "traefik.http.routers.${TRAEFIK_STACK}-admin-http.middlewares=redirect-to-https"
+
+  api:
+    command: uvicorn api.main:app  --reload --host 0.0.0.0 --proxy-headers
+    restart: on-failure
+    build:
+      context: .
+      target: api
+    volumes:
+      - ./src/api/:/app/src/api:z
+      - ./src/common/:/app/src/common/:z
+      - ./src/data/:/app/src/data/:z
+      - ./src/alembic/:/app/src/alembic/:z
+      - ./storage/:/app/storage/:z
+    networks:
+      - backend
+      - edge
+    environment:
+      - PYTHONUNBUFFERED=${PYTHONUNBUFFERED:-1}
+      - PG_HOST=${PG_HOST}
+      - REDIS_DSN=${REDIS_DSN}
+      - CENTRIFUGE_INTERNAL_HOST=${CENTRIFUGE_INTERNAL_HOST:-centrifugo:8008}
+    env_file:
+      - ${ENV_FILE:-.env}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      centrifugo:
+        condition: service_started
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request,sys;urllib.request.urlopen('http://127.0.0.1:8000/v1/health');sys.exit(0)"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_STACK}-recovered-network"
+      - "traefik.http.routers.${TRAEFIK_STACK}-api.rule=Host(`${TRAEFIK_DOMAIN}`) && PathPrefix(`/v1`)"
+      - "traefik.http.routers.${TRAEFIK_STACK}-api.entrypoints=websecure"
+      - "traefik.http.routers.${TRAEFIK_STACK}-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${TRAEFIK_STACK}-api.service=${TRAEFIK_STACK}-api"
+      - "traefik.http.services.${TRAEFIK_STACK}-api.loadbalancer.server.port=8000"
+      - "traefik.http.routers.${TRAEFIK_STACK}-api-http.rule=Host(`${TRAEFIK_DOMAIN}`) && PathPrefix(`/v1`)"
+      - "traefik.http.routers.${TRAEFIK_STACK}-api-http.entrypoints=web"
+      - "traefik.http.routers.${TRAEFIK_STACK}-api-http.middlewares=redirect-to-https"
+
+  api-worker:
+    command: faststream run api.stream:app --reload
+    restart: on-failure
+    build:
+      context: .
+      target: api
+    volumes:
+      - ./src/api/:/app/src/api:z
+      - ./src/common/:/app/src/common/:z
+      - ./src/data/:/app/src/data/:z
+    networks:
+      - backend
+    environment:
+      - PYTHONUNBUFFERED=${PYTHONUNBUFFERED:-1}
+      - PG_HOST=${PG_HOST}
+      - REDIS_DSN=${REDIS_DSN}
+      - CENTRIFUGE_INTERNAL_HOST=${CENTRIFUGE_WORKER_HOST:-centrifugo:8010}
+    env_file:
+      - ${ENV_FILE:-.env}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      centrifugo:
+        condition: service_started
+
+  api-scheduler:
+    command: python -m api.scheduler
+    restart: on-failure
+    build:
+      context: .
+      target: api
+    volumes:
+      - ./src/api/:/app/src/api:z
+      - ./src/common/:/app/src/common/:z
+      - ./src/data/:/app/src/data/:z
+    networks:
+      - backend
+    environment:
+      - PYTHONUNBUFFERED=${PYTHONUNBUFFERED:-1}
+      - PG_HOST=${PG_HOST}
+      - REDIS_DSN=${REDIS_DSN}
+      - CENTRIFUGE_INTERNAL_HOST=${CENTRIFUGE_WORKER_HOST:-centrifugo:8010}
+    env_file:
+      - ${ENV_FILE:-.env}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  migrations:
+    command: alembic upgrade head
+    restart: "no"
+    build:
+      context: .
+      target: migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./src/api/:/app/src/api:z
+      - ./src/common/:/app/src/common/:z
+      - ./src/data/:/app/src/data/:z
+      - ./src/alembic/:/app/src/alembic/:z
+    environment:
+      - PYTHONUNBUFFERED=${PYTHONUNBUFFERED:-1}
+      - PG_HOST=${PG_HOST}
+      - REDIS_DSN=${REDIS_DSN}
+      - CENTRIFUGE_INTERNAL_HOST=${CENTRIFUGE_WORKER_HOST:-centrifugo:8010}
+    networks:
+      - backend
+    env_file:
+      - ${ENV_FILE:-.env}

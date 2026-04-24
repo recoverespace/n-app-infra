@@ -1,0 +1,15 @@
+dependencies:
+- name: cloudnative-pg
+  repository: https://cloudnative-pg.github.io/charts
+  version: 0.21.4
+- name: keydb
+  repository: https://enapter.github.io/charts/
+  version: 0.48.0
+- name: recovered-backend
+  repository: ""
+  version: 0.1.0
+- name: default-templates
+  repository: ""
+  version: 1.0.6
+digest: sha256:1d1f6c661c712ddb72ab1597c1db3c65954ffac47a7e66701cca7c9b910e6714
+generated: "2024-06-11T22:01:07.414976+02:00"

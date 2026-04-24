@@ -1,0 +1,10 @@
+apiVersion: v2
+appVersion: dynamic
+version: v1.0
+description: Recovered Backend API
+name: api
+dependencies:
+  - name: api
+    version: 0.1.0
+  - name: default-templates
+    version: "1.0.6"

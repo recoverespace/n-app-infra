@@ -1,0 +1,3 @@
+
+nodeSelector:
+  topology.kubernetes.io/zone: "us-central1-a"

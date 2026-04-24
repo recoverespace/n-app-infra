@@ -1,0 +1,175 @@
+global:
+  image:
+    repository: us-central1-docker.pkg.dev/rcvrd-1777d/recovered-imagesm"
+
+configmaps:
+  recovered-config:
+    values:
+      SERVICE_PREFIX: "dev"
+      CENTRIFUGE_SCHEMA: "http"
+      CENTRIFUGE_INTERNAL_HOST: "centrifugo.apps:9000"
+      CENTRIFUGE_WS_SCHEMA: "wss"
+      CENTRIFUGE_HOST: "api.recoveredspace.com"
+      CENTRIFUGE_CHAT_NAMESPACE_TEMPLATE: "chat:messages#{}"
+      REDIS_DSN: "redis://keydb.apps:6379/1"
+      PG_HOST: pg-cluster-rw.apps
+      PG_PORT: "5432"
+      PG_SCHEMA: "backend"
+      GCS_BUCKET: "prod-k8s-cluster-recovered-resources"
+      EXTERNAL_URL: https://api.recoveredspace.com
+      GSPREAD_USERS_URL: "https://docs.google.com/spreadsheets/d/1b2dCVx0x9vE11z17EQRQpDT3ke9qOrpLZ31EGz0HHl4/edit?usp=sharing"
+      SECRET_KEY: "recovered-secret"
+      CIRCLE_SPACE_ID: "1644436"
+
+api:
+  ingress:
+    domain: "api.recoveredspace.com"
+  deployment:
+    replicas: 1
+  nodeSelector:
+    topology.kubernetes.io/zone: "us-central1-a"
+  envFrom: |
+    - configMapRef:
+        name: recovered-config
+
+        
+  extraEnv: &extraEnv
+    - name: PG_USER
+      valueFrom:
+        secretKeyRef:
+          name: pg-cluster-app
+          key: user
+    - name: PG_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: pg-cluster-app
+          key: password
+    - name: FIREBASE_CERTIFICATE
+      valueFrom:
+        secretKeyRef:
+          name: recovered-secrets-prod
+          key: firebase_certificate
+    - name: OTEL_AUTH_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: recovered-otlp
+          key: OTEL_AUTH_TOKEN
+    - name: OTEL_EXPORTER_OTLP_ENDPOINT
+      valueFrom:
+        secretKeyRef:
+          name: recovered-otlp
+          key: OTEL_EXPORTER_OTLP_ENDPOINT
+    - name: OTEL_EXPORTER_OTLP_PROTOCOL
+      valueFrom:
+        secretKeyRef:
+          name: recovered-otlp
+          key: OTEL_EXPORTER_OTLP_PROTOCOL
+    - name: CENTRIFUGE_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: centrifugo-secret
+          key: apiKey
+    - name: CENTRIFUGE_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: centrifugo-secret
+          key: tokenHmacSecretKey
+    - name: ONESIGNAL_APP_ID
+      valueFrom:
+        secretKeyRef:
+          name: onesignal-secret
+          key: appId
+    - name: ONESIGNAL_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: onesignal-secret
+          key: apiKey
+    - name: STORYBLOK_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: storyblok-credentials
+          key: storyblok_token
+    - name: STORYBLOK_MAPI_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: storyblok-credentials
+          key: storyblok_mapi_token
+    - name: CIRCLE_ADMIN_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: circle-secret
+          key: adminApiKey
+    - name: CIRCLE_HEADLESS_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: circle-secret
+          key: headlessApiKey
+    - name: CHAT_URL
+      valueFrom:
+        secretKeyRef:
+          name: recovered-secrets-prod
+          key: chat_url
+    - name: CHAT_OAUTH_CLIENT_ID
+      valueFrom:
+        secretKeyRef:
+          name: recovered-secrets-prod
+          key: chat_oauth_client_id
+    - name: CHAT_OAUTH_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: recovered-secrets-prod
+          key: chat_oauth_client_secret
+    - name: CHAT_OAUTH_TENANT_ID
+      valueFrom:
+        secretKeyRef:
+          name: recovered-secrets-prod
+          key: chat_oauth_tenant_id
+    - name: CHAT_OAUTH_SCOPE
+      valueFrom:
+        secretKeyRef:
+          name: recovered-secrets-prod
+          key: chat_oauth_scope
+    - name: CHAT_OAUTH_SUBSCRIPTION_KEY
+      valueFrom:
+        secretKeyRef:
+          name: recovered-secrets-prod
+          key: chat_oauth_subscription_key
+    - name: CHAT_MAX_MESSAGE_HISTORY
+      valueFrom:
+        secretKeyRef:
+          name: recovered-secrets-prod
+          key: chat_max_message_history
+    - name: CHAT_MAX_FACT_HISTORY
+      valueFrom:
+        secretKeyRef:
+          name: recovered-secrets-prod
+          key: chat_max_fact_history
+    - name: CHAT_RECENT_FACT_DAYS
+      valueFrom:
+        secretKeyRef:
+          name: recovered-secrets-prod
+          key: chat_recent_fact_days
+    - name: REPORTING_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: recovered-secrets-prod
+          key: reporting_secret
+
+
+  job:
+    nodeSelector:
+      topology.kubernetes.io/zone: "us-central1-a"
+    envFrom: |
+      - configMapRef:
+          name: recovered-config
+    extraEnv: *extraEnv
+
+  worker:
+    nodeSelector:
+      topology.kubernetes.io/zone: "us-central1-a"
+    deployment:
+      replicas: 1
+    envFrom: |
+      - configMapRef:
+          name: recovered-config
+    extraEnv: *extraEnv

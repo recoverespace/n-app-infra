@@ -1,0 +1,26 @@
+{
+    "allowed_origins": ["*"],
+    "presence": true,
+    "log_level": "debug",
+    "history_size": 100,
+    "history_ttl": "1000s",    
+    "namespaces": [
+      {
+        "name": "chat",
+        "presence": "true",
+        "history_size": 100,
+        "history_ttl": "1000s",
+        "history_recover": true,
+        "allow_user_limited_channels": true
+      },
+      {
+        "name": "chat-dev",
+        "presence": "true",
+        "history_size": 100,
+        "history_ttl": "1000s",
+        "history_recover": true,
+        "allow_user_limited_channels": true
+      }
+    ]
+  }
+  

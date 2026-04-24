@@ -1,0 +1,15 @@
+api:
+  global:
+    image: &image
+      repository: us-central1-docker.pkg.dev/rcvrd-1777d/recovered-images
+      name: recovered-backend-api
+  image: *image
+  worker:
+    image: *image
+  job:
+    image: *image
+  # ingress:
+    # domain: "api.dev.recovered.space"
+
+
+

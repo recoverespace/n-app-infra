@@ -1,0 +1,48 @@
+{% extends "sqladmin/layout.html" %}
+{% from 'sqladmin/_macros.html' import render_form_fields %}
+{% block content %}
+
+<div class="col-12">
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title">Delete users from Google Spreadsheet</h3>
+    </div>
+    <div class="card-body border-bottom py-3">
+      {% if not log %}
+      <div class="alert alert-info">
+        <p>Google Spreadsheet must be shared with user:
+        <pre>googledrive-access@rcvrd-1777d.iam.gserviceaccount.com</pre>
+        </p>
+      </div>
+      <form action="/admin/sync_users" method="GET" enctype="multipart/form-data">
+        <div class="row">
+          {% if error %}
+          <div class="alert alert-danger" role="alert">{{ error }}</div>
+          {% endif %}
+        </div>
+        <fieldset class="form-fieldset">
+          <input type="hidden" name="request_ts" value="{{ request_ts }}">
+          {{ render_form_fields(form, form_opts=form_opts) }}
+        </fieldset>
+        <div class="row">
+          <div class="col-md-2">
+            <a href="/admin/" class="btn">
+              Cancel
+            </a>
+          </div>
+          <div class="col-md-6">
+            <div class="btn-group flex-wrap" data-toggle="buttons">
+              <input type="submit" name="save" value="Sync" class="btn">
+            </div>
+          </div>
+        </div>
+      </form>
+      {% else %}
+      <div class="row">
+        <textarea class="form-control" rows="10">{{ log }}</textarea>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

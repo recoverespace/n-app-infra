@@ -1,0 +1,11 @@
+.git/
+.github/
+.ssh/
+azure_ssh_key
+.tmp/
+.vscode/
+.idea/
+.DS_Store
+**/*.log
+**/*.pyc
+__pycache__/

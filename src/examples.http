@@ -1,0 +1,143 @@
+
+
+#@baseUrl = https://api-dev.recoveredspace.com
+#@baseUrl = https://dev.trwale.it
+@baseUrl = http://127.0.0.1:8000
+
+# @name import
+POST {{baseUrl}}/v1/users/import HTTP/1.1
+Content-Type: application/json
+
+{
+    "email": "oshm9nska9@gmail.com"
+}
+###
+# @name login
+POST {{baseUrl}}/v1/auth/anonymous HTTP/1.1
+Content-Type: application/json
+
+{
+    "user_id": "niCj2XJuyecG7RhV8Fr9ydzMx5q1"
+}
+
+
+###
+# @name storyblock
+POST {{baseUrl}}/v1/storyblok HTTP/1.1
+Content-Type: application/json
+
+{
+    "text": "The user anastasiya@recoveredspace.com published the Story test test  (library/test-test)\nhttps://app.storyblok.com/#/me/spaces/289135/stories/0/0/517205664",
+    "action": "published",
+    "space_id": 2222,
+    "story_id": 2222222,
+    "full_slug": "library/test-test"
+}
+
+###
+@authToken = {{login.response.body.$.access_token}}
+
+# @name usersMe
+GET {{baseUrl}}/v1/users/me HTTP/1.1
+content-type: application/json
+authorization: Bearer {{authToken}}
+### 
+@authToken = {{login.response.body.$.access_token}}
+# @name usersMePatch
+PATCH {{baseUrl}}/v1/users/me HTTP/1.1
+content-type: application/json
+authorization: Bearer {{authToken}}
+
+{
+    "email":"alexandra.oshmyanskaya@gmail.com",
+    "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocJyuLIDA2pYYygBgsRWoUOBzSTmGkbGt56H3lPtVHfgDHvoVaE=s96-c"
+}
+
+
+###
+@authToken = {{login.response.body.$.access_token}}
+
+# @name usersMeSettingsPatch
+PATCH {{baseUrl}}/v1/users/me/settings HTTP/1.1
+content-type: application/json
+authorization: Bearer {{authToken}}
+
+{
+    "height_cm": "167"
+}
+
+###
+@authToken = {{login.response.body.$.access_token}}
+
+# @name getChats
+GET {{baseUrl}}/v1/chats HTTP/1.1
+content-type: application/json
+authorization: Bearer {{authToken}}
+
+###
+@authToken = {{login.response.body.$.access_token}}
+
+# @name getCentrifugeToken
+POST {{baseUrl}}/v1/auth/centrifuge/refresh/ HTTP/1.1
+content-type: application/json
+authorization: Bearer {{authToken}}
+
+###
+@authToken = {{login.response.body.$.access_token}}
+
+# @name getCentrifugeInfo
+GET {{baseUrl}}/v1/chats/centrifuge-info HTTP/1.1
+content-type: application/json
+authorization: Bearer {{authToken}}
+
+###
+@authToken = {{login.response.body.$.access_token}}
+
+# @name createChat
+POST {{baseUrl}}/v1/chats HTTP/1.1
+content-type: application/json
+authorization: Bearer {{authToken}}
+
+{
+    "name": "chat1"
+}
+
+
+###
+@authToken = {{login.response.body.$.access_token}}
+# @chatId = {{createChat.response.body.$.id}}
+@chatId = 1
+
+# @name getMessages
+GET {{baseUrl}}/v1/chats/{{chatId}}/messages HTTP/1.1
+content-type: application/json
+authorization: Bearer {{authToken}}
+
+###
+
+@chatId = 1
+# @name sendMessage
+POST {{baseUrl}}/v1/chats/{{chatId}}/messages HTTP/1.1
+content-type: application/json
+authorization: Bearer {{authToken}}
+
+{
+    "text": "hello"
+}
+###
+
+# @name triggerChat
+PUT {{baseUrl}}/v1/chats/{{chatId}}/messages?kind=greetings HTTP/1.1
+content-type: application/json
+authorization: Bearer {{authToken}}
+
+###
+
+# @name addFact
+POST {{baseUrl}}/v1/facts/{{chatId}}/messages HTTP/1.1
+content-type: application/json
+authorization: Bearer {{authToken}}
+
+{
+    "text": "hello"
+}

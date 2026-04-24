@@ -1,0 +1,45 @@
+
+image:
+  tag: "v5"
+env:
+  CENTRIFUGO_ALLOWED_ORIGINS: "*"
+service:
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/metrics"
+    prometheus.io/port: "9000"
+
+ingress:
+  enabled: true
+  ingressClassName: traefik
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+    traefik.ingress.kubernetes.io/router.entrypoints: "web, websecure"
+    traefik.http.routers.blog.rule: "Host(`api.recoveredspace.com`) && Path(`/connection`)"
+    traefik.http.routers.blog.tls: "true"
+    traefik.http.routers.blog.tls.certresolver: "letsencrypt"
+  hosts:
+  - host: "api.recoveredspace.com"
+    paths:
+      - "/connection"
+    # traefik.http.middlewares.sslheader.headers.customrequestheaders.X-Forwarded-Proto: "https"
+
+nodeSelector:
+  topology.kubernetes.io/zone: "us-central1-a"
+existingSecret: centrifugo-secret
+config:
+  engine: "redis"
+  namespaces:
+    - name: chat
+      presence: true
+      history_size: 100
+      history_ttl: 1000s
+      force_recovery: true
+      allow_user_limited_channels: true
+resources:
+  limits:
+    cpu: 200m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi

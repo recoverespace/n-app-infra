@@ -1,0 +1,85 @@
+name: Build and Push
+on:
+  push:
+    branches: ["master", "develop"]
+
+env:
+  GITHUB_REF: ${{ github.ref }}
+  GCP_PROJECT: rcvrd-1777d
+  GKE_CLUSTER: prod-k8s-cluster
+  WORKLOAD_PROVIDER: projects/99768191388/locations/global/workloadIdentityPools/github-pool/providers/my-repo
+
+jobs:
+  docker-release:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: "read"
+      id-token: "write"
+
+    steps:
+      - id: checkout
+        name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - id: get-tag
+        name: Get tag
+        run: echo ::set-output name=short_ref::${GITHUB_REF#refs/*/}
+
+      - id: gcp-auth
+        name: Authenticate with Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: access_token
+          workload_identity_provider: ${{ env.WORKLOAD_PROVIDER }}
+          service_account: github@${{ env.GCP_PROJECT }}.iam.gserviceaccount.com
+          access_token_lifetime: 300s
+
+      - id: login-prod
+        name: Login to Google Artifact Registry
+        uses: docker/login-action@v3
+        with:
+          registry: us-central1-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.gcp-auth.outputs.access_token }}
+
+      - id: docker-build-api
+        name: Build API
+        uses: docker/build-push-action@v5
+        with:
+          push: true
+          target: api
+          tags: us-central1-docker.pkg.dev/${{ env.GCP_PROJECT }}/recovered-images/recovered-backend-api:${{ steps.get-tag.outputs.short_ref }}
+
+      - id: docker-build-admin
+        name: Build Admin
+        uses: docker/build-push-action@v5
+        with:
+          push: true
+          target: admin
+          tags: us-central1-docker.pkg.dev/${{ env.GCP_PROJECT }}/recovered-images/recovered-backend-admin:${{ steps.get-tag.outputs.short_ref }}
+
+      - id: get-gke-credentials-prod
+        name: Get GKE credentials
+        uses: "google-github-actions/get-gke-credentials@v2"
+        with:
+          cluster_name: ${{ env.GKE_CLUSTER }}
+          location: us-central1
+
+      - id: deploy-helm-dev
+        name: Deploy Helm chart DEV
+        uses: WyriHaximus/github-action-helm3@v3
+        if: github.ref == 'refs/heads/develop'
+        with:
+          exec: |
+            helm upgrade --install api-dev ./k8s/chart -f k8s/envs/dev.yaml --set api.image.tag=${{ steps.get-tag.outputs.short_ref }}@${{ steps.docker-build-api.outputs.digest }} --namespace=apps --atomic --cleanup-on-fail --debug
+            # helm upgrade --install admin-dev ./k8s/admin -f k8s/envs/admin-dev.yaml --set image.tag=${{ steps.get-tag.outputs.short_ref }}@${{ steps.docker-build-admin.outputs.digest }} --namespace=apps --atomic --cleanup-on-fail --debug
+
+      - id: deploy-helm-prod
+        uses: WyriHaximus/github-action-helm3@v3
+        name: Deploy Helm chart PROD
+        if: github.ref == 'refs/heads/master'
+        with:
+          exec: |
+            helm upgrade --install api ./k8s/chart -f k8s/envs/prod.yaml --set api.image.tag=${{ steps.get-tag.outputs.short_ref }}@${{ steps.docker-build-api.outputs.digest }} --namespace=apps --atomic --cleanup-on-fail --debug
+            helm upgrade --install admin ./k8s/admin -f k8s/envs/admin-prod.yaml --set image.tag=${{ steps.get-tag.outputs.short_ref }}@${{ steps.docker-build-admin.outputs.digest }} --namespace=apps --atomic --cleanup-on-fail --debug

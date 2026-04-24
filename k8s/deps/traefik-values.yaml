@@ -1,0 +1,76 @@
+service:
+  spec:
+    loadBalancerIP: "35.223.19.32"
+extraObjects:
+  - apiVersion: v1
+    kind: Secret
+    metadata:
+      name: traefik-dashboard-auth-secret
+    type: kubernetes.io/basic-auth
+    stringData:
+      username: admin
+      password: recovered-temporary-password
+
+  - apiVersion: traefik.io/v1alpha1
+    kind: Middleware
+    metadata:
+      name: traefik-dashboard-auth
+    spec:
+      basicAuth:
+        secret: traefik-dashboard-auth-secret
+
+initContainers:
+  - name: volume-permissions
+    image: busybox:1.31.1
+    command: ["sh", "-c", "chmod -Rv 600 /data/*"]
+    volumeMounts:
+      - name: data
+        mountPath: /data
+
+additionalArguments:
+  - "--log=true"
+  - "--log.level=DEBUG"
+  - "--entrypoints.web.address=:8000"
+  - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+  - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+  - "--entrypoints.web.http.redirections.entrypoint.permanent=true"
+  - "--entrypoints.websecure.address=:8443"
+  - "--certificatesresolvers.letsencrypt.acme.storage=/data/acme-recoveredspace.json"
+  - "--certificatesresolvers.letsencrypt.acme.httpChallenge=true"
+  - "--certificatesresolvers.letsencrypt.acme.httpChallenge.entryPoint=web"
+  - "--certificatesresolvers.letsencrypt.acme.email=dev@recoveredspace.com"
+  - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+  - "--entrypoints.web.http.redirections.entrypoint.permanent=true"
+  - "--entrypoints.web.http.redirections.entryPoint.to=:443"
+resources:
+  limits:
+    cpu: 200m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+nodeSelector:
+  topology.kubernetes.io/zone: "us-central1-a"
+ports:
+  traefik:
+    port: 9000
+    expose:
+      default: false
+  web:
+    port: 8000
+    expose:
+      default: true
+    exposedPort: 80
+    protocol: TCP
+  websecure:
+    port: 8443
+    expose:
+      default: true
+    exposedPort: 443
+    protocol: TCP
+    tls:
+      enabled: true
+      options: ""
+      certResolver: "letsencrypt"
+      domains: []

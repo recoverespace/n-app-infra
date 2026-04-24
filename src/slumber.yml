@@ -1,0 +1,220 @@
+profiles:
+  http_file:
+    name: Jetbrains HTTP File
+    default: true
+    data:
+      baseUrl: https://api-dev.recoveredspace.com
+#      baseUrl: http://127.0.0.1:8000
+      authToken: '{{ response("login") | jsonpath("$.access_token") }}'
+      chatId: '5'
+requests:
+  import:
+    name: import
+    method: POST
+    url: '{{ baseUrl }}/v1/users/import'
+    body:
+      type: json
+      data:
+        email: oshm9nska9@gmail.com
+    headers:
+      Content-Type: application/json
+  login:
+    name: login
+    method: POST
+    url: '{{ baseUrl }}/v1/auth/anonymous'
+    body:
+      type: json
+      data:
+        user_id: '123'
+    headers:
+      Content-Type: application/json
+  storyblock:
+    name: storyblock
+    method: POST
+    url: '{{ baseUrl }}/v1/storyblok'
+    body:
+      type: json
+      data:
+        text: |-
+          The user anastasiya@recoveredspace.com published the Story test test  (library/test-test)
+          https://app.storyblok.com/#/me/spaces/289135/stories/0/0/517205664
+        action: published
+        space_id: 2222
+        story_id: 2222222
+        full_slug: library/test-test
+    headers:
+      Content-Type: application/json
+  usersMe:
+    name: usersMe
+    method: GET
+    url: '{{ baseUrl }}/v1/users/me'
+    headers:
+      content-type: application/json
+    authentication:
+      type: bearer
+      token: "{{authToken}}"
+  getChats:
+    name: getChats
+    method: GET
+    url: '{{ baseUrl }}/v1/chats/'
+    headers:
+      content-type: application/json
+    authentication:
+      type: bearer
+      token: "{{authToken}}"
+  createChat:
+    name: createChat
+    method: POST
+    url: '{{ baseUrl }}/v1/chats'
+    body:
+      type: json
+      data:
+        name: chat1
+    authentication:
+      type: bearer
+      token: '{{authToken}}'
+    headers:
+      content-type: application/json
+  getMessages:
+    name: getMessages
+    method: GET
+    url: '{{ baseUrl }}/v1/chats/{{ chatId }}/messages/'
+    headers:
+      content-type: application/json
+    authentication:
+      type: bearer
+      token: "{{authToken}}"
+  sendMessage:
+    name: sendMessage
+    method: POST
+    url: '{{ baseUrl }}/v1/chats/{{ chatId }}/messages/'
+    body:
+      type: json
+      data:
+        text: hello
+    authentication:
+      type: bearer
+      token: '{{authToken}}'
+    headers:
+      content-type: application/json
+  triggerChat:
+    name: triggerChat
+    method: PUT
+    url: '{{ baseUrl }}/v1/chats/{{ chatId }}/messages/'
+    query:
+      kind: '{{ prompt("kind", default="greetings") }}'
+    headers:
+      content-type: application/json
+    authentication:
+      type: bearer
+      token: "{{authToken}}"
+  addFact:
+    name: addFact
+    method: POST
+    url: '{{ baseUrl }}/v1/facts/{{ chatId }}/messages/'
+    body:
+      type: json
+      data:
+        text: hello
+    authentication:
+      type: bearer
+      token: '{{authToken}}'
+    headers:
+      content-type: application/json
+  checkPosts:
+    name: checkPosts
+    method: GET
+    url: '{{ baseUrl }}/v1/community/posts'
+    authentication:
+      type: bearer
+      token: '{{authToken}}'
+    headers:
+      content-type: application/json
+  createPost:
+    name: createPost
+    method: POST
+    url: '{{ baseUrl }}/v1/community/posts'
+    body:
+      type: json
+      data:
+        name: "Test Post Title"
+        body: "This is a test post content"
+    authentication:
+      type: bearer
+      token: '{{authToken}}'
+    headers:
+      content-type: application/json
+  deletePost:
+    name: deletePost
+    method: DELETE
+    url: '{{ baseUrl }}/v1/community/posts/{{ prompt("post_id", default="1") }}'
+    authentication:
+      type: bearer
+      token: '{{authToken}}'
+    headers:
+      content-type: application/json
+  getPostComments:
+    name: getPostComments
+    method: GET
+    url: '{{ baseUrl }}/v1/community/posts/{{ prompt("post_id", default="1") }}/comments'
+    authentication:
+      type: bearer
+      token: '{{authToken}}'
+    headers:
+      content-type: application/json
+  createComment:
+    name: createComment
+    method: POST
+    url: '{{ baseUrl }}/v1/community/posts/{{ prompt("post_id", default="1") }}/comments'
+    body:
+      type: json
+      data:
+        comment:
+          body: "This is a test comment"
+    authentication:
+      type: bearer
+      token: '{{authToken}}'
+    headers:
+      content-type: application/json
+  deleteComment:
+    name: deleteComment
+    method: DELETE
+    url: '{{ baseUrl }}/v1/community/posts/{{ prompt("post_id", default="1") }}/comments/{{ prompt("comment_id", default="1") }}'
+    authentication:
+      type: bearer
+      token: '{{authToken}}'
+    headers:
+      content-type: application/json
+  likePost:
+    name: likePost
+    method: POST
+    url: '{{ baseUrl }}/v1/community/posts/{{ prompt("post_id", default="1") }}/user_likes'
+    authentication:
+      type: bearer
+      token: '{{authToken}}'
+    headers:
+      content-type: application/json
+  unlikePost:
+    name: unlikePost
+    method: DELETE
+    url: '{{ baseUrl }}/v1/community/posts/{{ prompt("post_id", default="1") }}/user_likes'
+    authentication:
+      type: bearer
+      token: '{{authToken}}'
+    headers:
+      content-type: application/json
+  flagContent:
+    name: flagContent
+    method: POST
+    url: '{{ baseUrl }}/v1/community/flagged_contents'
+    body:
+      type: json
+      data:
+        content_type: "post"
+        content_id: 1
+        reason: "Inappropriate content"
+    authentication:
+      type: bearer
+      token: '{{authToken}}'
+    headers:
+      content-type: application/json

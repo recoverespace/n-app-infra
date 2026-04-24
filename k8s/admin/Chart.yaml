@@ -1,0 +1,8 @@
+apiVersion: v2
+appVersion: dynamic
+version: 0.1.0
+description: Recovered Admin
+name: admin
+dependencies:
+  - name: default-templates
+    version: "1.0.6"
