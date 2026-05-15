@@ -111,7 +111,7 @@ async def asset_links():
         "relation": ["delegate_permission/common.handle_all_urls"],
         "target": {
             "namespace": "android_app",
-            "package_name": "com.app.recovered",
+            "package_name": "com.app.napp",
             "sha256_cert_fingerprints": settings.ANDROID_SHA256_FINGERPRINTS
         }
     }]

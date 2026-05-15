@@ -21,7 +21,10 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_SECONDS: int = int(timedelta(days=30).total_seconds())
 
     ANDROID_SHA256_FINGERPRINTS: List[str] = Field(default_factory=list)
-    APPLE_APP_ID: str = "QHVW647327.com.app.recoveredspace"
+    APPLE_APP_ID: str = "QHVW647327.com.app.napp"
+
+
+    EXTERNAL_URL: str = "http://localhost:8000"
 
     CENTRIFUGE_SCHEMA: str = "http"
     CENTRIFUGE_WS_SCHEMA: str = "ws"

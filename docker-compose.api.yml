@@ -35,9 +35,24 @@ services:
       - "traefik.http.routers.${TRAEFIK_STACK}-admin-http.rule=Host(`${TRAEFIK_DOMAIN}`) && PathPrefix(`/admin`)"
       - "traefik.http.routers.${TRAEFIK_STACK}-admin-http.entrypoints=web"
       - "traefik.http.routers.${TRAEFIK_STACK}-admin-http.middlewares=redirect-to-https"
+      - "traefik.http.routers.${TRAEFIK_STACK}-admin-alias.rule=Host(`${ADMIN_DOMAIN}`) && PathPrefix(`/admin`)"
+      - "traefik.http.routers.${TRAEFIK_STACK}-admin-alias.entrypoints=websecure"
+      - "traefik.http.routers.${TRAEFIK_STACK}-admin-alias.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${TRAEFIK_STACK}-admin-alias.service=${TRAEFIK_STACK}-admin"
+      - "traefik.http.routers.${TRAEFIK_STACK}-admin-alias-http.rule=Host(`${ADMIN_DOMAIN}`) && PathPrefix(`/admin`)"
+      - "traefik.http.routers.${TRAEFIK_STACK}-admin-alias-http.entrypoints=web"
+      - "traefik.http.routers.${TRAEFIK_STACK}-admin-alias-http.middlewares=redirect-to-https"
+      - "traefik.http.routers.${TRAEFIK_STACK}-admin-alias-root.rule=Host(`${ADMIN_DOMAIN}`) && Path(`/`)"
+      - "traefik.http.routers.${TRAEFIK_STACK}-admin-alias-root.entrypoints=websecure"
+      - "traefik.http.routers.${TRAEFIK_STACK}-admin-alias-root.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${TRAEFIK_STACK}-admin-alias-root.middlewares=${TRAEFIK_STACK}-admin-root-redirect"
+      - "traefik.http.routers.${TRAEFIK_STACK}-admin-alias-root.service=${TRAEFIK_STACK}-admin"
+      - "traefik.http.middlewares.${TRAEFIK_STACK}-admin-root-redirect.redirectregex.regex=^https?://[^/]+/?$$"
+      - "traefik.http.middlewares.${TRAEFIK_STACK}-admin-root-redirect.redirectregex.replacement=https://${ADMIN_DOMAIN}/admin/"
+      - "traefik.http.middlewares.${TRAEFIK_STACK}-admin-root-redirect.redirectregex.permanent=true"
 
   api:
-    command: uvicorn api.main:app  --reload --host 0.0.0.0 --proxy-headers
+    command: uvicorn api.main:app  --reload --host 0.0.0.0 --proxy-headers --forwarded-allow-ips='*'
     restart: on-failure
     build:
       context: .
@@ -84,6 +99,13 @@ services:
       - "traefik.http.routers.${TRAEFIK_STACK}-api-http.rule=Host(`${TRAEFIK_DOMAIN}`) && PathPrefix(`/v1`)"
       - "traefik.http.routers.${TRAEFIK_STACK}-api-http.entrypoints=web"
       - "traefik.http.routers.${TRAEFIK_STACK}-api-http.middlewares=redirect-to-https"
+      - "traefik.http.routers.${TRAEFIK_STACK}-wellknown.rule=Host(`${TRAEFIK_DOMAIN}`) && PathPrefix(`/.well-known`)"
+      - "traefik.http.routers.${TRAEFIK_STACK}-wellknown.entrypoints=websecure"
+      - "traefik.http.routers.${TRAEFIK_STACK}-wellknown.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.${TRAEFIK_STACK}-wellknown.service=${TRAEFIK_STACK}-api"
+      - "traefik.http.routers.${TRAEFIK_STACK}-wellknown-http.rule=Host(`${TRAEFIK_DOMAIN}`) && PathPrefix(`/.well-known`)"
+      - "traefik.http.routers.${TRAEFIK_STACK}-wellknown-http.entrypoints=web"
+      - "traefik.http.routers.${TRAEFIK_STACK}-wellknown-http.service=${TRAEFIK_STACK}-api"
 
   api-worker:
     command: faststream run api.stream:app --reload
