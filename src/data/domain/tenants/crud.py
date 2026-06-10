@@ -1,3 +1,4 @@
+from sqlalchemy import any_
 from sqlmodel import col, select
 
 from data.domain.tenants.models import Tenant
@@ -12,7 +13,8 @@ class CRUDTenant(CRUDBase[Tenant, TenantCreate, TenantUpdate]):
         db = kwargs.get("db")
         if db is None:
             raise ValueError("Database session (db) must be provided as a keyword argument.")
-        statement = select(Tenant).where(col(Tenant.domains).contains([domain]))
+
+        statement = select(Tenant).where(domain == any_(col(Tenant.domains)))
         result = await db.execute(statement)
         return result.scalars().first()
 

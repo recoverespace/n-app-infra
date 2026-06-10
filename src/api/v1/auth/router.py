@@ -20,7 +20,6 @@ from api.utils import generate_username
 from data.domain.users.crud import user_crud
 from data.domain.users.models import User
 from data.domain.tenants.crud import tenant_crud
-from data.domain.tenants.models import Tenant
 
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -41,7 +40,7 @@ async def anonymous_login(user_id: str | None = Body(None, embed=True), db=DBDep
 async def domain_check(email: str = Body(..., embed=True), db=DBDep) -> dict:
     domain = email.split("@")[-1]
     tenant = await tenant_crud.get_by_domain(domain, db=db)
-    return {"exists": tenant is not None, "name": tenant.name if tenant else None}
+    return {"exists": tenant is not None, "name": tenant.title if tenant else None}
 
 
 @router.post("/login")
