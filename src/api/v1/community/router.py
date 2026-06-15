@@ -3,7 +3,7 @@ from sqlmodel import col, and_
 from datetime import datetime
 from collections.abc import Sequence
 
-from api.lib.deps import DBDep, UserIDDep
+from api.lib.deps import DBDep, UserDep
 # Добавляем импорт специфичных ошибок для перехвата
 from api.lib.safeguarding import check_text_safe, SafeguardingError, SafeguardingServiceError 
 from api.v1.community.schemas import (
@@ -30,13 +30,26 @@ from data.domain.community import (
 )
 from data.domain.community.models import Post, Comment
 from data.domain.community.schemas import ReactionType, PostCreate, CommentCreate
-from data.domain.users.crud import user_crud
 from data.domain.users.models import User
 from common.otel import get_logger
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/community", tags=["Community"])
+
+
+def resolve_tenant_id(user: User) -> int:
+    """Resolve the effective tenant for a user, defaulting to 0."""
+    return user.tenant_id or 0
+
+
+def ensure_tenant_match(resource_tenant_id: int, user_tenant_id: int) -> None:
+    """Raise 404 if a resource belongs to a different tenant than the user."""
+    if resource_tenant_id != user_tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Not found",
+        )
 
 
 def create_author_dto(user: User) -> AuthorDTO:
@@ -133,28 +146,29 @@ async def convert_comment_to_dto(comment: Comment, user_id: int, db) -> CommentD
 async def get_posts(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
-    user_id: int = UserIDDep,
+    user: User = UserDep,
     db=DBDep,
 ) -> PostsResponseDTO:
     """Get paginated list of posts, latest first"""
+    tenant_id = resolve_tenant_id(user)
     skip = (page - 1) * per_page
 
     posts = await post_crud.get_posts_latest_first(
         skip=skip,
         limit=per_page,
-        tenant_id=0,
+        tenant_id=tenant_id,
         include_blocked=False,
         db=db,
     )
 
     post_dtos = []
     for post in posts:
-        post_dto = await convert_post_to_dto(post, user_id, db)
+        post_dto = await convert_post_to_dto(post, user.id, db)  # type: ignore
         post_dtos.append(post_dto)
 
     total = await post_crud.get_count_by(
         condition=and_(
-            col(Post.tenant_id) == 0,
+            col(Post.tenant_id) == tenant_id,
             col(Post.blocked).is_(False)
         ),
         db=db
@@ -173,11 +187,14 @@ async def get_posts(
 @router.post("/posts", response_model=CreatePostResponseDTO, status_code=status.HTTP_201_CREATED)
 async def create_post(
     payload: CreatePostPayloadDTO,
-    user_id: int = UserIDDep,
+    user: User = UserDep,
     db=DBDep,
 ) -> CreatePostResponseDTO:
     """Create a new post"""
-    if await user_block_crud.is_user_blocked(user_id, tenant_id=0, db=db):
+    user_id = user.id
+    tenant_id = resolve_tenant_id(user)
+
+    if await user_block_crud.is_user_blocked(user_id, tenant_id=tenant_id, db=db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Your account has been blocked from posting"
@@ -185,7 +202,7 @@ async def create_post(
 
     is_blocked, keyword = await blocked_keyword_crud.check_content_for_keywords(
         content=payload.body,
-        tenant_id=0,
+        tenant_id=tenant_id,
         db=db
     )
 
@@ -195,7 +212,7 @@ async def create_post(
             reason=f"Content contains blocked keyword: {keyword}",
             content_type="post",
             moderator_id=None,
-            tenant_id=0,
+            tenant_id=tenant_id,
             meta=f'{{"keyword": "{keyword}", "user_id": {user_id}}}',
             db=db
         )
@@ -214,7 +231,7 @@ async def create_post(
     # --- SAFEGUARDING END ---
 
     post_data = PostCreate(
-        tenant_id=0,
+        tenant_id=tenant_id,
         user_id=user_id,
         title=payload.name,
         content=payload.body,
@@ -222,23 +239,23 @@ async def create_post(
     )
 
     post = await post_crud.create(post_data, db=db)
-    user = await user_crud.get(col(User.id) == user_id, db=db)
 
     return CreatePostResponseDTO(
         id=post.id,  # type: ignore
         name=post.title,
         body=post.content,
         created_at=post.created_at,
-        author=create_author_dto(user),  # type: ignore
+        author=create_author_dto(user),
     )
 
 @router.delete("/posts/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_post(
     post_id: int,
-    user_id: int = UserIDDep,
+    user: User = UserDep,
     db=DBDep,
 ):
     """Delete a post (only by author)"""
+    user_id = user.id
     post = await post_crud.get(col(Post.id) == post_id, db=db)
 
     if not post:
@@ -246,6 +263,8 @@ async def delete_post(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post not found"
         )
+
+    ensure_tenant_match(post.tenant_id, resolve_tenant_id(user))
 
     if post.user_id != user_id:
         raise HTTPException(
@@ -262,17 +281,19 @@ async def get_post_comments(
     post_id: int,
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=100),
-    user_id: int = UserIDDep,
+    user: User = UserDep,
     db=DBDep,
 ) -> CommentsResponseDTO:
     """Get paginated comments for a post, oldest first"""
-    
+
     post = await post_crud.get(col(Post.id) == post_id, db=db)
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post not found"
         )
+
+    ensure_tenant_match(post.tenant_id, resolve_tenant_id(user))
 
     skip = (page - 1) * per_page
 
@@ -290,7 +311,7 @@ async def get_post_comments(
 
     comment_dtos = []
     for comment in comments:
-        comment_dto = await convert_comment_to_dto(comment, user_id, db)
+        comment_dto = await convert_comment_to_dto(comment, user.id, db)  # type: ignore
         comment_dtos.append(comment_dto)
 
     total = await comment_crud.get_count_by(
@@ -316,11 +337,14 @@ async def get_post_comments(
 async def create_comment(
     post_id: int,
     payload: CreateCommentPayloadDTO,
-    user_id: int = UserIDDep,
+    user: User = UserDep,
     db=DBDep,
 ) -> CreateCommentResponseDTO:
     """Create a comment on a post"""
-    if await user_block_crud.is_user_blocked(user_id, tenant_id=0, db=db):
+    user_id = user.id
+    tenant_id = resolve_tenant_id(user)
+
+    if await user_block_crud.is_user_blocked(user_id, tenant_id=tenant_id, db=db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Your account has been blocked from commenting"
@@ -330,13 +354,15 @@ async def create_comment(
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
 
+    ensure_tenant_match(post.tenant_id, tenant_id)
+
     comment_body = payload.comment.get("body", "")
     if not comment_body:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Comment body is required")
 
     is_blocked, keyword = await blocked_keyword_crud.check_content_for_keywords(
         content=comment_body,
-        tenant_id=0,
+        tenant_id=tenant_id,
         db=db
     )
 
@@ -346,7 +372,7 @@ async def create_comment(
             reason=f"Content contains blocked keyword: {keyword}",
             content_type="comment",
             moderator_id=None,
-            tenant_id=0,
+            tenant_id=tenant_id,
             meta=f'{{"keyword": "{keyword}", "user_id": {user_id}}}',
             db=db
         )
@@ -365,7 +391,7 @@ async def create_comment(
     # --- SAFEGUARDING END ---
 
     comment_data = CommentCreate(
-        tenant_id=0,
+        tenant_id=tenant_id,
         post_id=post_id,
         user_id=user_id,
         parent_comment_id=None,
@@ -374,14 +400,13 @@ async def create_comment(
     )
 
     comment = await comment_crud.create(comment_data, db=db)
-    user = await user_crud.get(col(User.id) == user_id, db=db)
 
     return CreateCommentResponseDTO(
         id=comment.id,  # type: ignore
         post_id=post_id,
         body_text=comment.content,
         created_at=comment.created_at,
-        author=create_author_dto(user),  # type: ignore
+        author=create_author_dto(user),
     )
 
 
@@ -389,10 +414,11 @@ async def create_comment(
 async def delete_comment(
     post_id: int,
     comment_id: int,
-    user_id: int = UserIDDep,
+    user: User = UserDep,
     db=DBDep,
 ):
     """Delete a comment (only by author)"""
+    user_id = user.id
     comment = await comment_crud.get(col(Comment.id) == comment_id, db=db)
 
     if not comment:
@@ -400,6 +426,8 @@ async def delete_comment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Comment not found"
         )
+
+    ensure_tenant_match(comment.tenant_id, resolve_tenant_id(user))
 
     if comment.user_id != user_id:
         raise HTTPException(
@@ -414,7 +442,7 @@ async def delete_comment(
 @router.post("/posts/{post_id}/user_likes", response_model=ReactionResponseDTO)
 async def add_post_reaction(
     post_id: int,
-    user_id: int = UserIDDep,
+    user: User = UserDep,
     reaction_type: ReactionType = ReactionType.like,
     db=DBDep,
 ) -> ReactionResponseDTO:
@@ -426,12 +454,15 @@ async def add_post_reaction(
             detail="Post not found"
         )
 
+    tenant_id = resolve_tenant_id(user)
+    ensure_tenant_match(post.tenant_id, tenant_id)
+
     try:
         await reaction_crud.add_reaction(
-            user_id=user_id,
+            user_id=user.id,
             reaction_type=reaction_type,
             post_id=post_id,
-            tenant_id=0,
+            tenant_id=tenant_id,
             db=db
         )
         return ReactionResponseDTO(success=True, message=f"{reaction_type} added successfully")
@@ -442,13 +473,13 @@ async def add_post_reaction(
 @router.delete("/posts/{post_id}/user_likes", response_model=ReactionResponseDTO)
 async def remove_post_reaction(
     post_id: int,
-    user_id: int = UserIDDep,
+    user: User = UserDep,
     reaction_type: ReactionType = ReactionType.like,
     db=DBDep,
 ) -> ReactionResponseDTO:
     """Remove a 'like' reaction from a post (Circle.so compatible endpoint)"""
     success = await reaction_crud.remove_reaction(
-        user_id=user_id,
+        user_id=user.id,
         reaction_type=reaction_type,
         post_id=post_id,
         db=db
@@ -467,17 +498,21 @@ async def remove_post_reaction(
 async def add_comment_reaction(
     post_id: int,
     comment_id: int,
-    user_id: int = UserIDDep,
+    user: User = UserDep,
     reaction_type: ReactionType = ReactionType.like,
     db=DBDep,
 ) -> ReactionResponseDTO:
     """Add a 'like' reaction to a comment (Circle.so compatible endpoint)"""
+    tenant_id = resolve_tenant_id(user)
+
     post = await post_crud.get(col(Post.id) == post_id, db=db)
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post not found"
         )
+
+    ensure_tenant_match(post.tenant_id, tenant_id)
 
     comment = await comment_crud.get(col(Comment.id) == comment_id, db=db)
     if not comment:
@@ -486,13 +521,15 @@ async def add_comment_reaction(
             detail="Comment not found"
         )
 
+    ensure_tenant_match(comment.tenant_id, tenant_id)
+
     try:
         await reaction_crud.add_reaction(
-            user_id=user_id,
+            user_id=user.id,
             reaction_type=reaction_type,
             post_id=post_id,
             comment_id=comment_id,
-            tenant_id=0,
+            tenant_id=tenant_id,
             db=db
         )
         return ReactionResponseDTO(success=True, message=f"{reaction_type} added successfully")
@@ -504,13 +541,13 @@ async def add_comment_reaction(
 async def remove_comment_reaction(
     post_id: int,
     comment_id: int,
-    user_id: int = UserIDDep,
+    user: User = UserDep,
     reaction_type: ReactionType = ReactionType.like,
     db=DBDep,
 ) -> ReactionResponseDTO:
     """Remove a 'like' reaction from a comment (Circle.so compatible endpoint)"""
     success = await reaction_crud.remove_reaction(
-        user_id=user_id,
+        user_id=user.id,
         reaction_type=reaction_type,
         post_id=post_id,
         comment_id=comment_id,
@@ -529,10 +566,13 @@ async def remove_comment_reaction(
 @router.post("/flagged_contents", status_code=status.HTTP_201_CREATED)
 async def flag_content(
     payload: FlagContentPayloadDTO,
-    user_id: int = UserIDDep,
+    user: User = UserDep,
     db=DBDep,
 ):
     """Flag content for moderation review"""
+    user_id = user.id
+    tenant_id = resolve_tenant_id(user)
+
     if payload.content_type == "post":
         content = await post_crud.get(col(Post.id) == payload.content_id, db=db)
     elif payload.content_type == "comment":
@@ -549,13 +589,15 @@ async def flag_content(
             detail=f"{payload.content_type.capitalize()} not found"
         )
 
+    ensure_tenant_match(content.tenant_id, tenant_id)
+
     await moderation_log_crud.log_moderation_action(
         action="content_flag",
         reason=payload.reason,
         content_type=payload.content_type,
         content_id=payload.content_id,
         moderator_id=user_id,  # User who flagged
-        tenant_id=0,
+        tenant_id=tenant_id,
         meta=f'{{"flagged_by": {user_id}}}',
         db=db
     )
