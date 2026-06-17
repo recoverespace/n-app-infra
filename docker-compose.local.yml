@@ -1,0 +1,18 @@
+# Local development overrides. Not used on VM/production deploys.
+# Usage:
+#   docker compose --env-file .env.demo \
+#     -f docker-compose.yml -f docker-compose.api.yml -f docker-compose.local.yml \
+#     up -d --build
+
+services:
+  api:
+    ports:
+      - "8000:8000"
+
+  admin:
+    ports:
+      - "8001:8000"
+
+  centrifugo:
+    ports:
+      - "8008:8008"
