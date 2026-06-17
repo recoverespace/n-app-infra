@@ -1,28 +1,35 @@
 import html
 import uuid
 
-from fastapi import APIRouter, Body, Request
+from fastapi import APIRouter, Body, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from sqlmodel import col
+from firebase_admin import auth as firebase_auth
 
 from api.settings import settings
 from api.lib.centrifuge import generate_centrifugal_token
-from api.lib.deps import DBDep, UserIDDep
+from api.lib.deps import DBDep, RedisDep, UserIDDep
 from api.lib.firebase import get_firebase_user
+from api.lib.rate_limit import RateLimitExceeded, enforce_rate_limit
+from api.lib.resend import ResendError, resend_send_email
 from api.v1.auth.schemas import (
     CentrifugalRefreshTokenResponseModel,
     FirebaseTokenModel,
     RefreshAccessTokenRequestModel,
+    SendMagicLinkRequestModel,
+    SendMagicLinkResponseModel,
     TokenModel,
 )
 from api.v1.auth.utils import create_tokens, refresh_tokens
 from api.utils import generate_username
+from common.otel import get_logger
 from data.domain.users.crud import user_crud
 from data.domain.users.models import User
 from data.domain.tenants.crud import tenant_crud
 
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
+logger = get_logger(__name__)
 
 
 @router.post("/anonymous")
@@ -47,6 +54,92 @@ async def domain_check(email: str = Body(..., embed=True), db=DBDep) -> dict:
 async def firebase_login(data: FirebaseTokenModel, db=DBDep) -> TokenModel:
     user = await get_firebase_user(data.token, db=db)
     return await create_tokens(user, db)
+
+
+def _get_client_ip(request: Request) -> str:
+    # Prefer X-Forwarded-For when behind a proxy / load balancer.
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        # Can be a comma-separated list; the first is the original client.
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+@router.post("/send_magic_link")
+async def send_magic_link(
+    data: SendMagicLinkRequestModel,
+    request: Request,
+    redis=RedisDep,
+) -> SendMagicLinkResponseModel:
+    email = str(data.email).strip().lower()
+    ip = _get_client_ip(request)
+
+    window = settings.AUTH_MAGIC_LINK_RATE_LIMIT_WINDOW_SECONDS
+    try:
+        await enforce_rate_limit(
+            redis=redis,
+            key=f"rl:auth:magic_link:ip:{ip}",
+            limit=settings.AUTH_MAGIC_LINK_RATE_LIMIT_PER_IP,
+            window_seconds=window,
+        )
+        await enforce_rate_limit(
+            redis=redis,
+            key=f"rl:auth:magic_link:email:{email}",
+            limit=settings.AUTH_MAGIC_LINK_RATE_LIMIT_PER_EMAIL,
+            window_seconds=window,
+        )
+    except RateLimitExceeded:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests")
+    except Exception as exc:
+        logger.error(f"Magic link rate limit check failed ip={ip} email={email} err={exc!r}")
+        # Fail closed: avoid allowing abuse if Redis is down.
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service unavailable")
+
+    continue_url = settings.EXTERNAL_URL.rstrip("/") + settings.FIREBASE_EMAIL_LINK_CONTINUE_PATH
+    action_code_settings = firebase_auth.ActionCodeSettings(
+        url=continue_url,
+        handle_code_in_app=True,
+        ios_bundle_id=settings.FIREBASE_EMAIL_LINK_IOS_BUNDLE_ID,
+        android_package_name=settings.FIREBASE_EMAIL_LINK_ANDROID_PACKAGE,
+    )
+
+    try:
+        sign_in_link = firebase_auth.generate_sign_in_with_email_link(email, action_code_settings)
+    except Exception as exc:
+        logger.error(f"Magic link generate failed ip={ip} email={email} err={exc!r}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to generate link")
+
+    subject_prefix = settings.RESEND_SUBJECT_PREFIX.strip()
+    subject = f"{subject_prefix}Sign in to your account" if subject_prefix else "Sign in to your account"
+    safe_link = html.escape(sign_in_link, quote=True)
+    html_body = f"""<p>Hello,</p>
+<p>We received a request to sign in using this email address.</p>
+<p>To continue, click the link below:</p>
+<p><a href="{safe_link}">Sign in</a></p>
+<p>This link is valid for a limited time and can only be used once.</p>
+<p>If you did not request this email, you can safely ignore it. No changes will be made to your account.</p>"""
+    text_body = f"""Hello,
+
+We received a request to sign in using this email address.
+
+To continue, click the link below:
+{sign_in_link}
+
+This link is valid for a limited time and can only be used once.
+
+If you did not request this email, you can safely ignore it. No changes will be made to your account."""
+
+    try:
+        message_id = await resend_send_email(to=email, subject=subject, html=html_body, text=text_body)
+        logger.info(f"Magic link sent ip={ip} email={email} resend_id={message_id}")
+    except ResendError as exc:
+        logger.error(f"Magic link send failed ip={ip} email={email} err={exc!r}")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to send email")
+    except Exception as exc:
+        logger.error(f"Magic link unexpected send error ip={ip} email={email} err={exc!r}")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to send email")
+
+    return SendMagicLinkResponseModel(ok=True)
 
 
 @router.post("/token/refresh")

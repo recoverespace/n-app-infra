@@ -17,6 +17,7 @@ configmaps:
       PG_SCHEMA: "backend_dev"
       GCS_BUCKET: "prod-k8s-cluster-recovered-resources"
       EXTERNAL_URL: https://api-dev.recoveredspace.com
+      RESEND_FROM: "email@uthriveapp.com"
       GSPREAD_USERS_URL: "https://docs.google.com/spreadsheets/d/1b2dCVx0x9vE11z17EQRQpDT3ke9qOrpLZ31EGz0HHl4/edit?usp=sharing"
       SECRET_KEY: "recovered-devsecret"
       CIRCLE_SPACE_ID: "1644436"
@@ -152,6 +153,11 @@ api:
         secretKeyRef:
           name: recovered-secrets
           key: reporting_secret
+    - name: RESEND_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: recovered-secrets
+          key: resend_api_key
 
   job:
     nodeSelector:

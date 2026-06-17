@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
 
 class TokenModel(BaseModel):
@@ -42,6 +42,14 @@ class CentrifugalRefreshTokenResponseModel(BaseModel):
     id: str
     token: str
     ttl: int
+
+
+class SendMagicLinkRequestModel(BaseModel):
+    email: EmailStr
+
+
+class SendMagicLinkResponseModel(BaseModel):
+    ok: bool = True
 
 
 class ExternalIDModel(BaseModel):

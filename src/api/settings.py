@@ -55,6 +55,22 @@ class Settings(BaseSettings):
 
     FIREBASE_CERTIFICATE: str = ""
 
+    # Resend (email delivery)
+    RESEND_API_KEY: str = ""
+    RESEND_FROM: str = ""
+    RESEND_REPLY_TO: str = ""
+    RESEND_SUBJECT_PREFIX: str = ""
+
+    # Firebase email-link sign-in settings (magic link)
+    FIREBASE_EMAIL_LINK_ANDROID_PACKAGE: str = "com.app.napp"
+    FIREBASE_EMAIL_LINK_IOS_BUNDLE_ID: str = "com.app.napp"
+    FIREBASE_EMAIL_LINK_CONTINUE_PATH: str = "/v1/auth/email-link-login"
+
+    # Abuse protection for magic-link endpoint
+    AUTH_MAGIC_LINK_RATE_LIMIT_PER_IP: int = 10
+    AUTH_MAGIC_LINK_RATE_LIMIT_PER_EMAIL: int = 5
+    AUTH_MAGIC_LINK_RATE_LIMIT_WINDOW_SECONDS: int = int(timedelta(minutes=10).total_seconds())
+
     VERSION: str = "0.0.1"
     GIT_HASH: str = ""
     GIT_BRANCH: str = ""
