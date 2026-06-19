@@ -34,6 +34,10 @@ class UserSettingsModel(BaseModel):
     meal_plan_counter: int = 0
     meal_plan_cheer_index: int = 0
     notifications_enabled: bool = False
+    terms_and_privacy_accepted: bool = False
+    terms_and_privacy_accepted_at: datetime | None = None
+    marketing_consent: bool = False
+    marketing_consent_at: datetime | None = None
     questions_answers: dict[str, str | None] = Field(default_factory=dict)
     weight_kg: int | None = 132
     is_migrated_user: bool = False
@@ -104,6 +108,10 @@ class UserSettingsCreate(BaseModel):
     meal_plan_counter: int = 0
     meal_plan_cheer_index: int = 0
     notifications_enabled: bool = False
+    terms_and_privacy_accepted: bool = False
+    terms_and_privacy_accepted_at: datetime | None = None
+    marketing_consent: bool = False
+    marketing_consent_at: datetime | None = None
     questions_answers: dict[str, str | None] = Field(default_factory=dict)
     weight_kg: int | None = 132
     is_migrated_user: bool = False

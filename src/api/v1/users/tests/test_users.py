@@ -42,6 +42,38 @@ async def test_update_settings_user(client: AsyncClient):
     assert response.json()["settings"]["is_onboarding_finished"] is True
 
 
+async def test_update_consent_settings(client: AsyncClient):
+    user = await init_user(client)
+    response = await client.get(USERS_ME, headers=user.token_headers)
+    assert response.status_code == 200
+    settings = response.json()["settings"]
+    assert settings["terms_and_privacy_accepted"] is False
+    assert settings["marketing_consent"] is False
+    assert settings["terms_and_privacy_accepted_at"] is None
+    assert settings["marketing_consent_at"] is None
+
+    accepted_at = "2026-06-18T12:00:00+00:00"
+    response = await client.patch(
+        USERS_ME_SETTINGS,
+        json={
+            "terms_and_privacy_accepted": True,
+            "terms_and_privacy_accepted_at": accepted_at,
+            "marketing_consent": True,
+            "marketing_consent_at": accepted_at,
+        },
+        headers=user.token_headers,
+    )
+    assert response.status_code == 204
+
+    response = await client.get(USERS_ME, headers=user.token_headers)
+    assert response.status_code == 200
+    settings = response.json()["settings"]
+    assert settings["terms_and_privacy_accepted"] is True
+    assert settings["marketing_consent"] is True
+    assert settings["terms_and_privacy_accepted_at"] is not None
+    assert settings["marketing_consent_at"] is not None
+
+
 async def test_update_user_source(client: AsyncClient):
     user = await init_user(client)
     response = await client.get(USERS_ME, headers=user.token_headers)
