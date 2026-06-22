@@ -6,6 +6,7 @@ from sqladmin._menu import CategoryMenu, ViewMenu
 from sqladmin.authentication import AuthenticationBackend
 from starlette.requests import Request
 from starlette.responses import Response
+from starlette.staticfiles import StaticFiles
 from admin.views.users.users import UserAdmin
 from admin.views.users.sync_users import SyncUsersView
 from admin.views.users.devices import DeviceAdmin
@@ -17,6 +18,7 @@ from admin.views.chats.feedbacks import FeedbackAdmin
 from admin.views.configs.configs import ConfigAdmin
 from admin.views.files.static_files import StaticFileAdmin
 from admin.views.community import PostAdmin, CommentAdmin, BlockedKeywordAdmin, ModerationLogAdmin, UserBlockAdmin
+from admin.views.dashboard.dashboard import DashboardView
 from data.lib.db import engine
 from common.otel import get_logger
 from admin.settings import settings
@@ -80,7 +82,9 @@ class CustomAdmin(Admin):
 
 app = FastAPI(title="Recovered Admin", version="0.0.1")
 cur_dir = os.path.dirname(os.path.realpath(__file__))
+static_dir = os.path.join(cur_dir, "static")
 templates_dir = os.path.join(cur_dir, "templates")
+app.mount("/admin/static", StaticFiles(directory=static_dir), name="admin-static")
 admin = CustomAdmin(
     app, engine, templates_dir=templates_dir, authentication_backend=UserPassAuth("UserPassAuth")
 )
@@ -90,6 +94,7 @@ admin.add_view(FactsAdmin)
 admin.add_view(SyncUsersView)
 admin.add_view(DeviceAdmin)
 admin.add_view(TenantAdmin)
+admin.add_view(DashboardView)
 
 admin.add_view(ChatAdmin)
 admin.add_view(ChatMessageAdmin)

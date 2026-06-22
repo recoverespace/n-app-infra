@@ -1,5 +1,5 @@
+from markupsafe import Markup
 from wtforms import TextAreaField
-from wtforms.validators import DataRequired
 
 from data.domain.tenants.models import Tenant
 from sqladmin import ModelView
@@ -45,6 +45,12 @@ class TenantAdmin(ModelView, model=Tenant):
         "enabled",
         "domains",
     ]
+
+    column_formatters = {
+        Tenant.title: lambda m, a: Markup(
+            f'{m.title} <a href="/admin/dashboard?tenant_id={m.id}" style="margin-left:8px;font-size:12px;">Dashboard</a>'
+        ),
+    }
 
     column_details_list = [
         "id",

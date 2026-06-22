@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>uThrive — University Wellbeing Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<link rel="stylesheet" href="/admin/static/dashboard.css" />
+</head>
+<body>
+<div class="wrap">
+<a class="admin-back" href="/admin/tenant/list">&larr; Back to Tenants</a>
+<h1 class="sr-only">uThrive university wellbeing dashboard</h1>
+
+<div class="shell">
+  <div id="loadingOverlay" class="loading-overlay">Loading…</div>
+
+  <div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:1.25rem;">
+    <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
+      <div style="position:relative;">
+        <button id="tenantBtn" class="menu-btn" aria-haspopup="listbox" aria-expanded="false">
+          <span id="tenantLabel" style="font-size:16px;font-weight:500;">{{ tenant_title }}</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A7E6B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="8 9 12 5 16 9"></polyline><polyline points="8 15 12 19 16 15"></polyline></svg>
+        </button>
+        <div id="tenantMenu" class="pop-menu" role="listbox" style="top:46px;left:0;min-width:220px;"></div>
+      </div>
+      <div style="border-left:1px solid #E6DDCD;padding-left:18px;">
+        <p style="margin:0;font-size:12px;color:#8A7E6B;">Total registered</p>
+        <p style="margin:2px 0 0;font-size:20px;font-weight:500;line-height:1.1;" id="m-registered">—</p>
+      </div>
+    </div>
+
+    <div style="position:relative;">
+      <button id="dateBtn" class="menu-btn" aria-haspopup="dialog" aria-expanded="false">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A7E6B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+        <span id="dateLabel" style="font-size:13px;font-weight:500;">Last 30 days</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A7E6B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </button>
+      <div id="dateMenu" class="pop-menu" role="dialog" style="top:46px;right:0;width:260px;padding:8px;">
+        <div id="presetList"></div>
+        <div style="border-top:0.5px solid #EEE6D8;margin:6px 0;padding-top:8px;">
+          <p style="margin:0 0 6px;font-size:11px;color:#8A7E6B;">Custom range</p>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input type="date" id="dFrom" style="flex:1;font-size:12px;padding:5px 6px;border:0.5px solid #E6DDCD;border-radius:7px;color:#2C2A26;background:#FFF;" />
+            <span style="font-size:12px;color:#8A7E6B;">to</span>
+            <input type="date" id="dTo" style="flex:1;font-size:12px;padding:5px 6px;border:0.5px solid #E6DDCD;border-radius:7px;color:#2C2A26;background:#FFF;" />
+          </div>
+          <button id="applyCustom" style="margin-top:8px;width:100%;background:#D85A30;color:#FFF;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;">Apply range</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:1.25rem;">
+    <div class="card">
+      <p style="margin:0;font-size:13px;color:#8A7E6B;">Active <span id="m-active-window">last 30 days</span></p>
+      <p style="margin:4px 0 0;font-size:24px;font-weight:500;" id="m-active">—</p>
+      <p style="margin:2px 0 0;font-size:11px;color:#1D9E75;display:flex;align-items:center;gap:3px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg><span id="m-active-pct">—</span> of registered</p>
+    </div>
+    <div class="card">
+      <p style="margin:0;font-size:13px;color:#8A7E6B;">P2P engagement</p>
+      <p style="margin:4px 0 0;font-size:24px;font-weight:500;"><span id="m-p2p">—</span><span style="font-size:15px;color:#8A7E6B;">%</span></p>
+      <p style="margin:2px 0 0;font-size:11px;color:#8A7E6B;">post / comment / react</p>
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:5px;">
+        <p style="margin:0;font-size:13px;color:#8A7E6B;">In support zone</p>
+        <button class="info-btn" data-info="support" aria-label="How this is calculated"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></button>
+      </div>
+      <p style="margin:4px 0 0;font-size:24px;font-weight:500;color:#D85A30;"><span id="m-support">—</span><span style="font-size:15px;">%</span></p>
+      <p style="margin:2px 0 0;font-size:11px;color:#8A7E6B;">low mood + high stress</p>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+    <div class="panel">
+      <button class="corner-info" data-info="trend_eng" aria-label="How this data is computed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></button>
+      <p style="margin:0 0 2px;font-size:14px;font-weight:500;">Average wellbeing over time</p>
+      <p style="margin:0 0 10px;font-size:11px;color:#8A7E6B;">population mean &middot; scale 1&ndash;10</p>
+      <div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:10px;font-size:11px;color:#8A7E6B;">
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:3px;background:#1D9E75;border-radius:2px;"></span>Mood</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:3px;background:#D85A30;border-radius:2px;"></span>Stress</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:3px;background:#C79A3B;border-radius:2px;"></span>Sleep</span>
+      </div>
+      <div style="position:relative;width:100%;height:170px;"><canvas id="trendChart"></canvas></div>
+      <p id="trendEmpty" style="display:none;margin:0;font-size:11px;color:#8A7E6B;text-align:center;">No check-in data for this period</p>
+    </div>
+    <div class="panel">
+      <button class="corner-info" data-info="comm_eng" aria-label="How this data is computed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></button>
+      <p style="margin:0 0 2px;font-size:14px;font-weight:500;">Community activity</p>
+      <p style="margin:0 0 10px;font-size:11px;color:#8A7E6B;">peer-to-peer interactions</p>
+      <div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:10px;font-size:11px;color:#8A7E6B;">
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:2px;background:#0F6E56;"></span>Posts</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:2px;background:#5DCAA5;"></span>Comments</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:2px;background:#B6E8D7;"></span>Reactions</span>
+      </div>
+      <div style="position:relative;width:100%;height:170px;"><canvas id="commChart"></canvas></div>
+      <p id="commEmpty" style="display:none;margin:0;font-size:11px;color:#8A7E6B;text-align:center;">No community activity for this period</p>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1.1fr 0.9fr;gap:16px;margin-bottom:16px;">
+    <div class="panel">
+      <button class="corner-info" data-info="trackers_eng" aria-label="How this data is computed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></button>
+      <p style="margin:0 0 12px;font-size:14px;font-weight:500;">Top trackers used</p>
+      <div id="trackers"></div>
+    </div>
+    <div class="panel">
+      <button class="corner-info" data-info="ai_eng" aria-label="How this data is computed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></button>
+      <p style="margin:0 0 2px;font-size:14px;font-weight:500;">AI support usage</p>
+      <p style="margin:0 0 12px;font-size:11px;color:#8A7E6B;">reflections &amp; check-ins</p>
+      <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:4px;">
+        <span style="font-size:24px;font-weight:500;" id="m-ai-total">—</span>
+        <span style="font-size:12px;color:#8A7E6B;">AI reflections, selected period</span>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:14px;">
+        <span style="font-size:18px;font-weight:500;color:#534AB7;" id="m-ai-pct">—</span>
+        <span style="font-size:12px;color:#8A7E6B;">of active users engaged AI</span>
+      </div>
+      <div style="position:relative;width:100%;height:90px;"><canvas id="aiChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px;">
+    <button class="corner-info" data-info="themes_eng" aria-label="How this data is computed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></button>
+    <p style="margin:0 0 2px;font-size:14px;font-weight:500;">Themes raised in the community</p>
+    <p style="margin:0 0 14px;font-size:11px;color:#8A7E6B;">share of conversations mentioning each theme &middot; <span id="themes-window">last 30 days</span></p>
+    <div id="themes"></div>
+  </div>
+
+  <div class="panel">
+    <button class="corner-info" data-info="dims_eng" aria-label="How this data is computed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></button>
+    <p style="margin:0 0 12px;font-size:14px;font-weight:500;">Wellbeing dimensions &middot; population average</p>
+    <div id="dims" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;"></div>
+  </div>
+
+  <div id="infoPop" style="display:none;position:absolute;z-index:30;max-width:280px;background:#2C2A26;color:#F5EFE4;font-size:12px;line-height:1.55;padding:10px 12px;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.18);"></div>
+</div>
+</div>
+
+<script>
+  window.__DASHBOARD__ = {
+    tenantId: {{ tenant_id }},
+    tenants: {{ tenants_json | safe }}
+  };
+</script>
+<script src="/admin/static/dashboard.js"></script>
+</body>
+</html>
